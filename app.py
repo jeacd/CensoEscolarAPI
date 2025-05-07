@@ -21,10 +21,15 @@ def funcoesDb(metodo, data=None):
         
         if (metodo == 'GETALL'):
             instituicoesEnsino = []
+            
+            pagina = data['pagina']
+            tamanho = data['tamanho']
+            offset = (pagina - 1) * tamanho
 
             cur.execute('''
                 SELECT * FROM tb_instituicao
-            ''')
+                LIMIT ? OFFSET ?
+            ''', (tamanho, offset))
             resultSet = cur.fetchall()
             
             for row in resultSet:
@@ -185,7 +190,11 @@ def funcoesDb(metodo, data=None):
 
 @app.get('/instituicoesensino')
 def getInstituicoesEnsino():
-    resultadoRequisicao = funcoesDb('GETALL')
+    pagina = int(request.args.get('pagina', 1))
+    tamanho = int(request.args.get('tamanho', 10))
+    conteudoRequisicao = {'pagina': pagina, 'tamanho': tamanho}
+
+    resultadoRequisicao = funcoesDb('GETALL', conteudoRequisicao)
     return jsonify(resultadoRequisicao), 200
 
 
