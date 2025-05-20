@@ -6,4 +6,8 @@ suplemento_cursos_tecnicos_2024.csv
 microdados_ed_basica_2024.csv
 dados.json
 popularDB.py
-dados.json
+cache_ibge.json
+atualizarJson.py
+schema_COPY.sql
+app.1.py
+stringToInt.py

@@ -1,17 +1,52 @@
 DROP TABLE IF EXISTS tb_instituicao;
+DROP TABLE IF EXISTS tb_municipio;
+DROP TABLE IF EXISTS tb_microrregiao;
+DROP TABLE IF EXISTS tb_mesorregiao;
+DROP TABLE IF EXISTS tb_uf;
+
+CREATE TABLE tb_uf (
+    id INTEGER PRIMARY KEY,
+    created TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    sigla TEXT,
+    nome TEXT
+);
+
+CREATE TABLE tb_mesorregiao (
+    id INTEGER PRIMARY KEY,
+    created TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    nome TEXT,
+    co_uf INTEGER,
+    FOREIGN KEY (co_uf) REFERENCES tb_uf(id)
+);
+
+CREATE TABLE tb_microrregiao (
+    id INTEGER PRIMARY KEY,
+    created TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    nome TEXT,
+    co_uf INTEGER,
+    FOREIGN KEY (co_uf) REFERENCES tb_uf(id)
+);
+
+CREATE TABLE tb_municipio (
+    id INTEGER PRIMARY KEY,
+    created TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    nome TEXT,
+    co_uf INTEGER,
+    co_mesorregiao INTEGER,
+    co_microrregiao INTEGER,
+    FOREIGN KEY (co_uf) REFERENCES tb_uf(id),
+    FOREIGN KEY (co_mesorregiao) REFERENCES tb_mesorregiao(id),
+    FOREIGN KEY (co_microrregiao) REFERENCES tb_microrregiao(id)
+);
 
 CREATE TABLE tb_instituicao (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     created TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     NO_REGIAO TEXT,
     CO_REGIAO INTEGER,
-    NO_UF TEXT,
     CO_UF INTEGER,
-    NO_MUNICIPIO TEXT,
     CO_MUNICIPIO INTEGER,
-    NO_MESORREGIAO TEXT,
     CO_MESORREGIAO INTEGER,
-    NO_MICRORREGIAO TEXT,
     CO_MICRORREGIAO INTEGER,
     NO_ENTIDADE TEXT,
     CO_ENTIDADE INTEGER,
@@ -20,5 +55,9 @@ CREATE TABLE tb_instituicao (
     QT_MAT_FUND INTEGER,
     QT_MAT_MED INTEGER,
     QT_MAT_EJA INTEGER,
-    QT_MAT_ESP INTEGER
+    QT_MAT_ESP INTEGER,
+    FOREIGN KEY (CO_UF) REFERENCES tb_uf(id),
+    FOREIGN KEY (CO_MUNICIPIO) REFERENCES tb_municipio(id),
+    FOREIGN KEY (CO_MESORREGIAO) REFERENCES tb_mesoregiao(id),
+    FOREIGN KEY (CO_MICRORREGIAO) REFERENCES tb_microregiao(id)
 );
