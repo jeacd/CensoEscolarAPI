@@ -1,6 +1,13 @@
-from flask import Flask, jsonify, request, g
-from marshmallow import ValidationError
+from flask import jsonify, request
 import sqlite3
+from marshmallow import ValidationError
+
+
+from helpers.database import getConnection
+from helpers.application import app
+from helpers.logging import logger
+from helpers.CORS import cors
+
 
 from models.instituicaoEnsino import InstituicaoEnsino
 from models.instituicaoEnsino import InstituicaoEnsinoSchema
@@ -9,26 +16,7 @@ from models.mesorregiao import Mesorregiao
 from models.microrregiao import Microrregiao
 from models.municipio import Municipio
 
-app = Flask(__name__)
-
-DATABASE = 'censoescolar.db'
-
-def make_dicts(cursor, row):
-    return {cursor.description[idx][0]: value for idx, value in enumerate(row)}
-
-def getConnection():
-    db = getattr(g, '_database', None)
-    if db is None:
-        db = g._database = sqlite3.connect(DATABASE)
-    db.row_factory = make_dicts
-    return db
-
-@app.teardown_appcontext
-def closeConnection(exception):
-    db = getattr(g, '_database', None)
-    if db is not None:
-        db.close()
-
+cors.init_app(app)
 
 def funcoesDb(metodo, data=None):
     try:
@@ -36,6 +24,8 @@ def funcoesDb(metodo, data=None):
         cur = conn.cursor()
         
         if (metodo == 'GETALL'):
+            logger.info("GET Instituições")
+            
             instituicoesEnsino = []
             
             pagina = data['pagina']
@@ -55,6 +45,8 @@ def funcoesDb(metodo, data=None):
             return instituicoesEnsino
         elif (metodo == 'GETONE'):
             try:
+                logger.info(f"GET Instituição pelo Identificador: {data}")
+                
                 cur.execute('''
                     SELECT * FROM tb_instituicao WHERE CO_ENTIDADE = ?
                 ''', (int(data),))
@@ -64,9 +56,11 @@ def funcoesDb(metodo, data=None):
                 
                 return instituicaoEnsino
             except Exception as e:
-                print("Erro:", e)
+                logger.info(f"GET Instituição por Identificador - Erro: {e}")
                 return jsonify({'mensagem': 'Erro ao buscar instituição'}), 500
         elif (metodo == 'POST'):
+            logger.info(f"POST {data}")
+            
             cur.execute('''
                     INSERT INTO tb_instituicao (
                         NO_REGIAO, CO_REGIAO, CO_UF,
@@ -92,20 +86,22 @@ def funcoesDb(metodo, data=None):
             
             data['id'] = cur.lastrowid
             institucao = InstituicaoEnsino(**data)
-
             
             return institucao
         elif (metodo == 'DELETE'):
             try:
+                logger.info(f"DELETE {data}")
                 cur.execute('''
                 DELETE FROM tb_instituicao WHERE CO_ENTIDADE = ?
                 ''', (data,))
                 conn.commit()
                 return jsonify({'mensagem': 'Instituição removida'}), 200
             except:
+                logger.info(f'Instituição ({data}) não removida')
                 return jsonify({'mensagem': 'Instituição não removida'}), 404
         elif (metodo == 'UPDATE'):
             try:
+                logger.info(f'UPDATE instituição {data}')
                 cur.execute('''
                     UPDATE tb_instituicao SET NO_ENTIDADE = ? WHERE CO_ENTIDADE = ?;
                     ''', (data['NO_ENTIDADE'], int(data['CO_ENTIDADE']))
@@ -113,8 +109,10 @@ def funcoesDb(metodo, data=None):
                 conn.commit()
                 return jsonify({'mensagem': 'Instituição atualizada com sucesso!'}), 200
             except:
+                logger.info(f'Erro no UPDATE da Instituição {data}')
                 return jsonify({'mensagem': 'Instituição não encontrada.'}), 404
     except sqlite3.Error as e:
+        logger.info(f'Problema com o banco de dados: {e}')
         return jsonify({'mensagem': 'Problema com o banco de dados: {e}'}), 500
 
 
@@ -148,7 +146,6 @@ def postInstituicaoEnsino():
     schema = InstituicaoEnsinoSchema()
     try:
         conteudoRequisicao = schema.load(request.get_json())
-        print(conteudoRequisicao)
     except ValidationError as err:
         return jsonify({'mensagem': err.messages}), 400
 

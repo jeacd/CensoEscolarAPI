@@ -11,3 +11,5 @@ atualizarJson.py
 schema_COPY.sql
 app.1.py
 stringToInt.py
+__pycache__
+*.log
