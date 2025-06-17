@@ -4,7 +4,7 @@ from marshmallow import ValidationError
 
 
 from helpers.database import getConnection
-from helpers.application import app
+from helpers.application import app, api
 from helpers.logging import logger
 from helpers.CORS import cors
 
@@ -16,7 +16,12 @@ from models.mesorregiao import Mesorregiao
 from models.microrregiao import Microrregiao
 from models.municipio import Municipio
 
+
+from resources.InstituicaoResource import InstituicaoResource
+from resources.IndexResource import IndexResource
+
 cors.init_app(app)
+api.add_resource(IndexResource, '/')
 
 def funcoesDb(metodo, data=None):
     try:
