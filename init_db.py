@@ -1,12 +1,19 @@
-import sqlite3
+import psycopg2
 
-connection = sqlite3.connect('censoescolar.db')
+connection = psycopg2.connect(
+    dbname='censoescolar',
+    user='postgres',
+    password='123456789',
+    host='localhost',
+    port='5434'
+)
 
-connection.execute("PRAGMA foreign_keys = ON;")
+cursor = connection.cursor()
 
-with open('schema.sql') as f:
-    connection.executescript(f.read())
-    
+with open('schema.sql', 'r') as f:
+    cursor.execute(f.read())
+
 connection.commit()
 
+cursor.close()
 connection.close()
