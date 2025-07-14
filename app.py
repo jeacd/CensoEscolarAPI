@@ -17,38 +17,19 @@ from models.microrregiao import Microrregiao
 from models.municipio import Municipio
 
 
-from resources.InstituicaoResource import InstituicaoResource
+from resources.InstituicaoResource import InstituicoesResource
 from resources.IndexResource import IndexResource
 
 cors.init_app(app)
 api.add_resource(IndexResource, '/')
+api.add_resource(InstituicoesResource, '/instituicoesensino')
 
 def funcoesDb(metodo, data=None):
     try:
         conn = getConnection()
         cur = conn.cursor()
-        
-        if (metodo == 'GETALL'):
-            logger.info("GET Instituições")
-            
-            instituicoesEnsino = []
-            
-            pagina = data['pagina']
-            tamanho = data['tamanho']
-            offset = (pagina - 1) * tamanho
 
-            cur.execute('''
-                SELECT * FROM tb_instituicao
-                LIMIT ? OFFSET ?
-            ''', (tamanho, offset))
-            resultSet = cur.fetchall()
-            
-            for instituicao in resultSet:
-                instituicaoEnsino = InstituicaoEnsino(**instituicao)
-                instituicoesEnsino.append(instituicaoEnsino)
-                
-            return instituicoesEnsino
-        elif (metodo == 'GETONE'):
+        if (metodo == 'GETONE'):
             try:
                 logger.info(f"GET Instituição pelo Identificador: {data}")
                 
@@ -121,17 +102,77 @@ def funcoesDb(metodo, data=None):
         return jsonify({'mensagem': 'Problema com o banco de dados: {e}'}), 500
 
 
-@app.get('/instituicoesensino')
-def getInstituicoesEnsino():
-    pagina = int(request.args.get('pagina', 1))
-    tamanho = int(request.args.get('tamanho', 5))
-    conteudoRequisicao = {'pagina': pagina, 'tamanho': tamanho}
-
-    resultadoRequisicao = funcoesDb('GETALL', conteudoRequisicao)
+@app.get('/anos')
+def getAnos():
+    conn = getConnection()
+    cur = conn.cursor()
     
-    schema = InstituicaoEnsinoSchema(many=True)
-    return jsonify(schema.dump(resultadoRequisicao)), 200
+    cur.execute('''
+                SELECT DISTINCT ano FROM tb_instituicao
+                ''')
+    resultSet = cur.fetchall()
+    anos = {str(i): resultSet[i][0] for i in range(len(resultSet))}
+    return(jsonify(anos)), 200
 
+@app.get('/minandmaxvalues')
+def GetMinAndMaxValues():
+    ano = int(request.args.get('ano', 0))
+    
+    conn = getConnection()
+    cur = conn.cursor()
+    
+    if ano > 0:
+        cur.execute('''
+                    SELECT 
+                        MIN(soma) AS menor_valor, 
+                        MAX(soma) AS maior_valor
+                    FROM (
+                        SELECT SUM(qt_mat_bas) AS soma
+                        FROM tb_instituicao
+                        WHERE ano = %s
+                        GROUP BY co_uf
+                    ) AS sub''', (ano,))
+        resultSet = cur.fetchone()
+        return(jsonify(resultSet)), 200
+    
+    return(jsonify({'erro': 'Não encontrado'})), 404
+
+@app.get('/censoescolar')
+def censoEscolar():
+    ano = int(request.args.get('ano', 0))
+    estado = int(request.args.get('estado', 0))
+    
+    conn = getConnection()
+    cur = conn.cursor()
+
+    if ano != 0 and estado == 0:
+        cur.execute('''
+                    SELECT co_uf, SUM(qt_mat_bas) as qt_mat_bas
+                        FROM tb_instituicao
+                        WHERE ano = %s
+                        GROUP BY co_uf
+                    ''', (ano,))
+        resultSet = cur.fetchall()
+        return(jsonify(dict(resultSet))), 200
+    
+    if estado != 0 and ano == 0:
+        cur.execute('''
+                    SELECT co_uf, SUM(qt_mat_bas) as qt_mat_bas
+                        FROM tb_instituicao
+                        WHERE co_uf = %s
+                        GROUP BY co_uf
+                    ''', (estado,))
+        resultSet = cur.fetchall()
+        return(jsonify(dict(resultSet))), 200
+    
+    cur.execute('''
+                SELECT co_uf, SUM(qt_mat_bas) as qt_mat_bas
+                FROM tb_instituicao
+                WHERE ano = %s AND co_uf = %s
+                GROUP BY co_uf
+            ''', (ano, estado))
+    resultSet = cur.fetchall()
+    return(jsonify(dict(resultSet))), 200
 
 @app.get('/instituicoesensino/<cod_entidade>')
 def getInstituicaoEnsino(cod_entidade):
@@ -173,6 +214,17 @@ def updateInstituicaoEnsino():
 
 
 '---------------------------REQUISIÇÕES PARA UF------------------------------'
+@app.get('/estados')
+def getEstados():
+    conn = getConnection()
+    cur = conn.cursor()
+    
+    cur.execute('''
+                SELECT id, nome FROM tb_uf
+                ''')
+    resultSet = cur.fetchall()
+    return(jsonify(dict(resultSet))), 200
+    
 @app.post('/uf')
 def postUf():
     conteudoRequisicao = request.get_json()
