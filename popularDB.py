@@ -4,18 +4,17 @@ import requests
 import time
 import json
 from pathlib import Path
+from tqdm import tqdm  # Importando a biblioteca tqdm para a barra de progresso
 
-
-arquivos_csv = ['microdados_ed_basica_2023.csv','microdados_ed_basica_2024.csv']
+arquivos_csv = ['microdados_ed_basica_2023.csv', 'microdados_ed_basica_2024.csv']
 colunas_desejadas = [
-    'NO_REGIAO', 'CO_REGIAO', 'CO_UF', 'CO_MUNICIPIO', 'CO_MESORREGIAO',
+    'NU_ANO_CENSO', 'NO_REGIAO', 'CO_REGIAO', 'CO_UF', 'CO_MUNICIPIO', 'CO_MESORREGIAO',
     'CO_MICRORREGIAO', 'NO_ENTIDADE', 'CO_ENTIDADE',
     'QT_MAT_BAS', 'QT_MAT_INF', 'QT_MAT_FUND', 'QT_MAT_MED',
     'QT_MAT_EJA', 'QT_MAT_ESP'
 ]
 chunk_size = 1000
 cache_file = Path("cache_ibge.json")
-
 
 if cache_file.exists():
     with cache_file.open("r", encoding="utf-8") as f:
@@ -65,7 +64,6 @@ cursor = conn.cursor()
 def inserir_parcelar_dados(df):
     for _, row in df.iterrows():
         co_municipio = str(row.get('CO_MUNICIPIO'))
-
         # Os dados microrregião e mesorregião estão incorretos, então é preciso corrigir
         try:
             co_meso, co_micro = obter_codigos_ibge(co_municipio)
@@ -85,7 +83,7 @@ def inserir_parcelar_dados(df):
                 qt_mat_eja, qt_mat_esp
             ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
-            row.get('NU_ANO'),
+            safe_int(row.get('NU_ANO_CENSO')),
             row.get('NO_REGIAO'),
             row.get('CO_REGIAO'),
             row.get('CO_UF'),
@@ -102,16 +100,27 @@ def inserir_parcelar_dados(df):
             safe_int(row.get('QT_MAT_ESP'))
         ))
 
-
 for arquivo in arquivos_csv:
+    # limit = 0
     print(f"Processando: {arquivo}")
-    for chunk in pd.read_csv(arquivo, sep=';', encoding='latin1', chunksize=chunk_size):
+    
+    # Obter o número total de chunks para o arquivo
+    total_chunks = sum(1 for _ in pd.read_csv(arquivo, sep=';', encoding='latin1', chunksize=chunk_size))
+    print(f"Total de chunks para o arquivo {arquivo}: {total_chunks}")
+
+    # Aqui, o tqdm cria uma barra de progresso para o loop de chunks
+    for chunk in tqdm(pd.read_csv(arquivo, sep=';', encoding='latin1', chunksize=chunk_size), 
+                      desc=f"Processando {arquivo}", 
+                      unit="chunk", 
+                      total=total_chunks):
         colunas_existentes = [col for col in colunas_desejadas if col in chunk.columns]
         chunk_filtrado = chunk[colunas_existentes]
         inserir_parcelar_dados(chunk_filtrado)
         conn.commit()
         salvar_cache()
-        print(f"Chunk de {len(chunk_filtrado)} linhas inserido.")
+        # limit = limit + 1
+        # if limit == 5:
+        #     break
 
 cursor.close()
 conn.close()
