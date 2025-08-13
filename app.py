@@ -1,13 +1,5 @@
-from helpers.database import getConnection
 from helpers.application import app, api
 from helpers.CORS import cors
-
-
-from models.uf import Uf
-from models.mesorregiao import Mesorregiao
-from models.microrregiao import Microrregiao
-from models.municipio import Municipio
-
 
 from resources.IndexResource import IndexResource
 

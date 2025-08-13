@@ -1,82 +1,78 @@
 from flask_restful import Resource
-from flask import request, jsonify
-import psycopg2.extras
-
-from helpers.database import getConnection
+from flask import request
+from sqlalchemy.exc import SQLAlchemyError
 from helpers.logging import logger
+from helpers.database import db
+from models.instituicaoEnsino import InstituicaoEnsino
 
 class AnosResource(Resource):
     def get(self):
-        conn = getConnection()
-        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-        
-        cur.execute('''
-            SELECT DISTINCT ano FROM tb_instituicao
-        ''')
-        resultSet = cur.fetchall()
-        
-        anos = {str(i): resultSet[i]['ano'] for i in range(len(resultSet))}
-        
-        return anos, 200
-    
+        try:
+            anos = db.session.query(InstituicaoEnsino.ano).distinct().all()
+            anos_dict = {str(i): ano[0] for i, ano in enumerate(anos)}
+            return anos_dict, 200
+        except SQLAlchemyError as e:
+            logger.error(f"Erro ao buscar anos: {e}")
+            return {"erro": "Problema com o banco de dados."}, 500
+
 class MinAndMaxValuesResource(Resource):
     def get(self):
-        ano = int(request.args.get('ano', 0))
+        ano = request.args.get('ano', type=int, default=0)
 
-        conn = getConnection()
-        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        if ano <= 0:
+            return {'erro': 'Ano inválido'}, 400
+        
+        try:
+            subquery = (
+                db.session.query(
+                    InstituicaoEnsino.co_uf,
+                    db.func.sum(InstituicaoEnsino.qt_mat_bas).label("soma")
+                )
+                .filter(InstituicaoEnsino.ano == ano)
+                .group_by(InstituicaoEnsino.co_uf)
+                .subquery()
+            )
 
-        if ano > 0:
-            cur.execute('''
-                SELECT 
-                    MIN(soma) AS menor_valor, 
-                    MAX(soma) AS maior_valor
-                FROM (
-                    SELECT SUM(qt_mat_bas) AS soma
-                    FROM tb_instituicao
-                    WHERE ano = %s
-                    GROUP BY co_uf
-                ) AS sub
-            ''', (ano,))
-            resultSet = cur.fetchone()
+            resultado = db.session.query(
+                db.func.min(subquery.c.soma).label("menor_valor"),
+                db.func.max(subquery.c.soma).label("maior_valor")
+            ).one()
 
-            if resultSet and (resultSet['menor_valor'] is not None and resultSet['maior_valor'] is not None):
-                return resultSet, 200
+            if resultado.menor_valor is not None and resultado.maior_valor is not None:
+                return {
+                    "menor_valor": resultado.menor_valor,
+                    "maior_valor": resultado.maior_valor
+                }, 200
 
             return {'erro': 'Nenhum dado encontrado para este ano'}, 404
 
-        return {'erro': 'Ano inválido'}, 400
-    
+        except SQLAlchemyError as e:
+            logger.error(f"Erro ao buscar min/max valores: {e}")
+            return {"erro": "Problema com o banco de dados."}, 500
+
 class CensoEscolarResource(Resource):
     def get(self):
-        ano = int(request.args.get('ano', 0))
-        estado = int(request.args.get('estado', 0))
+        ano = request.args.get('ano', type=int, default=0)
+        estado = request.args.get('estado', type=int, default=0)
 
         if ano == 0:
             return {}, 200
 
-        conn = getConnection()
-        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-
         try:
-            if estado == 0:
-                cur.execute('''
-                    SELECT co_uf, SUM(qt_mat_bas) as qt_mat_bas
-                    FROM tb_instituicao
-                    WHERE ano = %s
-                    GROUP BY co_uf
-                ''', (ano,))
-            else:
-                cur.execute('''
-                    SELECT co_uf, SUM(qt_mat_bas) as qt_mat_bas
-                    FROM tb_instituicao
-                    WHERE ano = %s AND co_uf = %s
-                    GROUP BY co_uf
-                ''', (ano, estado))
+            query = db.session.query(
+                InstituicaoEnsino.co_uf,
+                db.func.sum(InstituicaoEnsino.qt_mat_bas).label("qt_mat_bas")
+            ).filter(InstituicaoEnsino.ano == ano)
 
-            result_set = cur.fetchall()
-            return {str(row["co_uf"]): row["qt_mat_bas"] for row in result_set}, 200
+            if estado != 0:
+                query = query.filter(InstituicaoEnsino.co_uf == estado)
 
-        except Exception as e:
+            query = query.group_by(InstituicaoEnsino.co_uf)
+
+            resultados = query.all()
+
+            return {str(row.co_uf): row.qt_mat_bas for row in resultados}, 200
+
+        except SQLAlchemyError as e:
             logger.error(f"Erro ao buscar dados do censo escolar: {e}")
             return {"erro": "Erro interno no servidor"}, 500
